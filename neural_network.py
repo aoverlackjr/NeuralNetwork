@@ -71,24 +71,17 @@ class NeuralNetwork(object):
         if kwargs is not None:
             for key, value in kwargs.items():
                 if key == 'sigma_weight':
-                    max_weight = value
+                    sigma_weight = value
                 if key == 'sigma_bias':
-                    max_bias = value
+                    sigma_bias = value
         
         # populate weight matrix with random values
         for wa in self.weight_addresses:
             self.weight_matrix[wa[0]][wa[1]] = np.random.randn()*sigma_weight
             
         # populate bias vector with random values
-        for i in range(len(self.bias_vector)):
-            self.bias_vector[i] = np.random.randn()*sigma_weight
+        self.bias_vector = np.random.randn(self.nr_of_neurons)*sigma_bias
             
-        
-        
-        
-                    
-        
-                    
         
     def create_genetic_network(self, n_inputs, chromosome, n_outputs, **kwargs):
         
@@ -122,14 +115,18 @@ class NeuralNetwork(object):
         else:
             pass
             
-            
-    def create_bias_vector(self, **kwargs):
-        pass      
     
         
     def run(self, input_vector):
-        
-        pass
+        # input the input vector into the signal field
+        for i in self.input_addresses:
+            self.signal_vector[i] = input_vector[i]
+        # run the neurons in the network
+        for n in range(self.nr_of_inputs, self.nr_of_neurons):
+            weights = self.weight_matrix[:,[n]].reshape(self.nr_of_neurons)
+            self.signal_vector[n] = self.fire_function(self.signal_vector, weights, self.bias_vector[n])
+        # get the output
+        return self.signal_vector[self.output_addresses]
         
     def _sigmoid(self, input_vector, weight_vector, bias):
         z = weight_vector.dot(input_vector) + bias

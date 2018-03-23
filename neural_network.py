@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+from math import sqrt
 
 class NeuralNetwork(object):
     
@@ -25,10 +26,7 @@ class NeuralNetwork(object):
         
         self.configure(*args, **kwargs)
         
-        
-        
     def configure(self, *args, **kwargs):
-
         if kwargs is not None:
             for key, value in kwargs.items():
                 if key == 'activation':
@@ -42,8 +40,6 @@ class NeuralNetwork(object):
                     self.create_feedforward_network(value[0], value[1], value[2], **kwargs)
                 if key == 'genetic_config':
                     self.create_genetic_network(value[0], value[1], value[2], **kwargs)
-        
-        
         
     def create_feedforward_network(self, n_inputs, hidden_array, n_outputs, **kwargs):
         # set characteristics
@@ -81,14 +77,55 @@ class NeuralNetwork(object):
             
         # populate bias vector with random values
         self.bias_vector = np.random.randn(self.nr_of_neurons)*sigma_bias
+        
+    def create_genetic_network(self, n_inputs, n_outputs, chromosome, **kwargs):
+        
+        # First check if the chromosome lenght is compatible with the given
+        # network parameters.
+        # The first stretch of the cromo is for the network connectivity,
+        # the second (of equal lenght) for the weights
+        # The chromo length should be 2*(N^2 - N)/2 + N
+        # which simplifies to N^2, where N = n_hidden + n_in + n_out
+        
+        n_hidden = int(sqrt(len(chromosome)) - n_inputs - n_outputs)
+        
+        if n_hidden < 1:
+            raise Exception('Chromosome length not of compatible length')
+        else:
+            self.nr_of_neurons    = n_inputs + n_hidden + n_outputs
+            self.nr_of_hidden     = n_hidden
+            self.nr_of_inputs     = n_inputs
+            self.nr_of_outputs    = n_outputs
             
-        
-    def create_genetic_network(self, n_inputs, chromosome, n_outputs, **kwargs):
-        
-        pass
+            # pre-allocate the network data
+            self.bias_vector   = np.zeros(self.nr_of_neurons)
+            self.weight_matrix = np.zeros((self.nr_of_neurons, self.nr_of_neurons))
+            self.signal_vector = np.zeros(self.nr_of_neurons)
+            
+            # set the signal addressing
+            self.input_addresses  = range(0,self.nr_of_inputs)
+            self.output_addresses = range(self.nr_of_neurons-self.nr_of_outputs, self.nr_of_neurons)
+            
+            n_conns  = int(self.nr_of_neurons*(self.nr_of_neurons - 1)/2)
+            
+            # extract the stretch determining the connections from the chromo:
+            chr_connections  = chromosome[0:n_conns]
+            chr_weights      = chromosome[n_conns:2*n_conns]
+            self.bias_vector = np.array(chromosome[2*n_conns:])
+            
+            index = 0
+            for i in range(0, self.nr_of_neurons):
+                for j in range(i+1, self.nr_of_neurons):
+                    if chr_connections[index] > 0.0:
+                        self.weight_matrix[i][j] = chr_weights[index]
+                    index += 1
+            
+            # create weight addresses from the genetically created weight
+            # matrix
+            self.create_weight_addresses()
         
     def create_weight_addresses(self, **kwargs):
-        if kwargs is not None:
+        if kwargs:
             for key, value in kwargs.items():
                 if key == 'feedforward_config':
                     n_inputs = value[0]
@@ -113,10 +150,12 @@ class NeuralNetwork(object):
         # if no input was given, try to use the existing weight matrix to extract
         # the non-zero weights' addresses
         else:
-            pass
-            
+            self.weight_addresses = []
+            for i in range(self.nr_of_neurons):
+                for j in range(self.nr_of_neurons):
+                    if self.weight_matrix[i][j] != 0:
+                        self.weight_addresses.append([i,j])
     
-        
     def run(self, input_vector):
         # input the input vector into the signal field
         for i in self.input_addresses:
@@ -128,6 +167,26 @@ class NeuralNetwork(object):
         # get the output
         return self.signal_vector[self.output_addresses]
         
+    def extract_state(self):
+        # return the weights and biases as one single vector, based on 
+        # the address list
+        state = []
+        for address in self.weight_addresses:
+            state.append(self.weight_matrix[address[0]][address[1]])
+        for bias in self.bias_vector:
+            state.append(bias)
+        return state
+        
+    def implement_state(self, state_vector):
+        # put all the elements of the state vector into the weight
+        # matrix and bias_vector
+        index = 0
+        for address in self.weight_addresses:
+            self.weight_matrix[address[0]][address[1]] = state_vector[index]
+            index += 1
+        # put the trailing remainder in the ias vector
+        self.bias_vector = state_vector[index:]
+            
     def _sigmoid(self, input_vector, weight_vector, bias):
         z = weight_vector.dot(input_vector) + bias
         return 1.0/(1.0 + np.exp(-z))

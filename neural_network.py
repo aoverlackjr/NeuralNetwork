@@ -26,6 +26,7 @@ class NeuralNetwork(object):
 
         self.configure(*args, **kwargs)
 
+
     def configure(self, *args, **kwargs):
         if kwargs is not None:
             for key, value in kwargs.items():
@@ -40,6 +41,8 @@ class NeuralNetwork(object):
                     self.create_feedforward_network(value[0], value[1], value[2], **kwargs)
                 if key == 'genetic_config':
                     self.create_genetic_network(value[0], value[1], value[2])
+                if key == 'hybrid_config':
+                    self.create_hybrid_network(value[0], value[1], value[2], value[3], **kwargs)
 
     def create_feedforward_network(self, n_inputs, hidden_array, n_outputs, **kwargs):
         # set characteristics
@@ -124,16 +127,25 @@ class NeuralNetwork(object):
             # matrix
             self.create_weight_addresses()
 
+    def create_hybrid_network(self, n_inputs, hidden_array, n_outputs, chromo, **kwargs):
+        # Create normal feedforward config
+        self.create_feedforward_network(n_inputs, hidden_array, n_outputs, **kwargs)
+        # load with the chromo
+        self.implement_state(chromo)
+
+
     def create_weight_addresses(self, **kwargs):
         if kwargs:
             for key, value in kwargs.items():
-                if key == 'feedforward_config':
+                if key == 'feedforward_config' or 'hybrid_config':
                     n_inputs = value[0]
                     hidden_array = value[1]
+                    n_outputs    = value[2]
                     nrs = []
                     nrs.append(n_inputs)
                     for layer in hidden_array:
                         nrs.append(layer)
+                    nrs.append(n_outputs)
 
                     self.weight_addresses = []
                     ranges = []
@@ -180,12 +192,17 @@ class NeuralNetwork(object):
     def implement_state(self, state_vector):
         # put all the elements of the state vector into the weight
         # matrix and bias_vector
-        index = 0
-        for address in self.weight_addresses:
-            self.weight_matrix[address[0]][address[1]] = state_vector[index]
-            index += 1
-        # put the trailing remainder in the ias vector
-        self.bias_vector = state_vector[index:]
+
+        # do some checking:
+        if len(state_vector) == len(self.weight_addresses) + len(self.bias_vector):
+            index = 0
+            for address in self.weight_addresses:
+                self.weight_matrix[address[0]][address[1]] = state_vector[index]
+                index += 1
+            # put the trailing remainder in the bias vector
+            self.bias_vector = state_vector[index:]
+        else:
+            raise Exception('Weight and bias state to be implemented not of correct length')
 
     def _sigmoid(self, input_vector, weight_vector, bias):
         z = weight_vector.dot(input_vector) + bias
@@ -198,3 +215,19 @@ class NeuralNetwork(object):
     def _sine(self, input_vector, weight_vector, bias):
         z = weight_vector.dot(input_vector) + bias
         return np.sine(z)
+
+    @staticmethod
+    def count_feedforward_connections(n_inputs, hidden_array, n_outputs):
+        nrs = []
+        nrs.append(n_inputs)
+        for n in hidden_array:
+            nrs.append(n)
+        nrs.append(n_outputs)
+
+        nr_of_connections = 0
+        for i in range(1,len(nrs)):
+            nr_of_connections += nrs[i-1]*nrs[i]
+
+        # add biases:
+        nr_of_connections += sum(hidden_array) + n_outputs + n_inputs
+        return nr_of_connections
